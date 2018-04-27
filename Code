@@ -1,0 +1,414 @@
+// Needed for the GetConsoleWindow() function for Windows 2000 or higher
+//#define _WIN32_WINNT 0x0500
+
+#include "stdafx.h"
+#include <iostream>
+#include <string>
+#include <array>
+#include <map>
+#include <time.h>     // Used for initializing the random number generator
+#include <limits>     // Used for clearing the cin buffer
+#include <windows.h>  // Windows API header, used for resizing the console
+#include "Minesweeper.h"
+#undef max
+
+using namespace std;
+
+//Classes
+
+class Square {
+	bool bomb, hidden, marker;
+	int row, col;  // Assigns here square position is.
+	int index;     // Assigns adjacent number of bombs
+
+
+public:
+	Square() : row(0), col(0), index(0) {};
+	Square(const int &rowAssignment, const int &colAssignment) {
+		row = rowAssignment;
+		col = colAssignment;
+		index = 0;
+	}
+	Square(const Square &o) {
+		row = o.row;
+		col = o.col;
+		index = o.index;
+	}
+	int getRow() const {
+		return row;
+	}
+	int getCol() const {
+		return col;
+	}
+	void setbomb(const bool bombAssignment) {
+		bomb = bombAssignment;
+	}
+	bool getbomb() const {
+		return bomb;
+	}
+	void upIndex() {
+		index++;
+	}
+	int getIndex() const {
+		return index;
+	}
+	void setHidden(const bool hiddenAssignment) {
+		hidden = hiddenAssignment;
+	}
+	bool getHidden() const {
+		return hidden;
+	}
+	void setMarker(const bool markerAssignment) {
+		marker = markerAssignment;
+	}
+	bool getMarker() const {
+		return marker;
+	}
+
+};
+
+
+class Board {
+	const static int numRows = 7;
+	const static int numCols = numRows;
+	int numbombs; // Count number of unmarked bombs
+
+				  // Array key is used to facilitate element access with row & col user input
+	typedef array<int, 2> SquarePosition;
+	map<SquarePosition, Square > boardSquares;
+
+public:
+
+	Board() {
+		int row, col;
+		srand(time(NULL));
+		numbombs = 0;
+
+		//Generate Squares with random bomb placement
+		for (int i = 0; i < numRows; i++) {
+			for (int j = 0; j < numCols; j++) {
+
+				//Create a new Square
+				row = i + 1;
+				col = j + 1;
+
+				Square newSquare(row, col);
+				boardSquares[{row, col}] = newSquare;
+				boardSquares[{row, col}].setHidden(true);
+				boardSquares[{row, col}].setMarker(false);
+
+				//Drop bombs
+				int bombWeight = rand() % 10;
+				if (bombWeight > 7) {
+					boardSquares[{row, col}].setbomb(true);
+					numbombs++;
+				}
+				else
+					boardSquares[{row, col}].setbomb(false);
+			}
+		}
+
+		// Count adjacent bombs for each Square - the Square indices
+		for (int i = 0; i < numRows; i++) {
+			for (int j = 0; j < numCols; j++) {
+				row = i + 1;
+				col = j + 1;
+				int colM = col - 1;
+				int rowM = row - 1;
+				int colP = col + 1;
+				int rowP = row + 1;
+
+				//Check each Square for adjacent bombs
+				if ((col > 1) && (boardSquares[{row, colM}].getbomb() == true)) //Left
+					boardSquares[{row, col}].upIndex();
+				if ((row > 1) && (boardSquares[{rowM, col}].getbomb() == true)) //Upper
+					boardSquares[{row, col}].upIndex();
+				if ((col > 1) && (row > 1) && (boardSquares[{rowM, colM}].getbomb() == true)) //Upper-left
+					boardSquares[{row, col}].upIndex();
+				if ((row > 1) && (col < numCols) && (boardSquares[{rowM, colP}].getbomb() == true)) //Upper-right
+					boardSquares[{row, col}].upIndex();
+				if ((col < numCols) && (boardSquares[{row, colP}].getbomb() == true)) //Right
+					boardSquares[{row, col}].upIndex();
+				if ((row < numRows) && (boardSquares[{rowP, col}].getbomb() == true)) //Lower
+					boardSquares[{row, col}].upIndex();
+				if ((row < numRows) && (col > 1) && (boardSquares[{rowP, colM}].getbomb() == true)) //Lower-left
+					boardSquares[{row, col}].upIndex();
+				if ((row < numRows) && (col < numCols) && (boardSquares[{rowP, colP}].getbomb() == true)) //Lower-right
+					boardSquares[{row, col}].upIndex();
+			}
+		}
+
+		// Automatically reveal a Square if it has a neighbor with index == 0
+		// Each Square is set with hidden == true by default earlier in the constructor
+		for (int i = 0; i < numRows; i++) {
+			for (int j = 0; j < numCols; j++) {
+				row = i + 1;
+				col = j + 1;
+				int colM = col - 1;
+				int rowM = row - 1;
+				int colP = col + 1;
+				int rowP = row + 1;
+
+				// Check each Square for adjacent Squares with index == 0
+				// If any adjacent Squares have index == 0, the Square is revealed
+				if ((col > 1) && (boardSquares[{row, colM}].getIndex() == 0)) //Left
+					boardSquares[{row, col}].setHidden(false);
+				if ((row > 1) && (boardSquares[{rowM, col}].getIndex() == 0)) //Upper
+					boardSquares[{row, col}].setHidden(false);
+				if ((col > 1) && (row > 1) && (boardSquares[{rowM, colM}].getIndex() == 0)) //Upper-left
+					boardSquares[{row, col}].setHidden(false);
+				if ((row > 1) && (col < numCols) && (boardSquares[{rowM, colP}].getIndex() == 0)) //Upper-right
+					boardSquares[{row, col}].setHidden(false);
+				if ((col < numCols) && (boardSquares[{row, colP}].getIndex() == 0)) //Right
+					boardSquares[{row, col}].setHidden(false);
+				if ((row < numRows) && (boardSquares[{rowP, col}].getIndex() == 0)) //Lower
+					boardSquares[{row, col}].setHidden(false);
+				if ((row < numRows) && (col > 1) && (boardSquares[{rowP, colM}].getIndex() == 0)) //Lower-left
+					boardSquares[{row, col}].setHidden(false);
+				if ((row < numRows) && (col < numCols) && (boardSquares[{rowP, colP}].getIndex() == 0)) //Lower-right
+					boardSquares[{row, col}].setHidden(false);
+			}
+		}
+
+	}
+
+
+	void printDividerLine() {
+		for (int j = 0; j < numCols; j++) {
+			cout << "----";
+
+			if (j == (numCols - 1))
+				cout << "-";
+		}
+		cout << endl;
+	}
+
+	void printSquareLine(int row) {
+		int col;
+		for (int j = 0; j < numCols; j++) {
+			col = j + 1;
+			cout << "|" + to_string(row) + to_string(col) + " ";
+
+			if (j == (numCols - 1))
+				cout << "|";
+			
+		}
+		cout << endl;
+	}
+
+	void printCenterLine(int row) {
+		int col, index;
+		bool hidden, bomb, marker;
+
+		for (int j = 0; j < numCols; j++) {
+			col = j + 1;
+			hidden = boardSquares[{row, col}].getHidden();
+			bomb = boardSquares[{row, col}].getbomb();
+			index = boardSquares[{row, col}].getIndex();
+			marker = boardSquares[{row, col}].getMarker();
+			cout << "| ";
+
+			if (hidden && (index > 0 || bomb) && !marker)
+				cout << "H ";
+			else if (!hidden && bomb)
+				cout << "M ";
+			else if (!hidden && index > 0)
+				cout << to_string(index) + " ";
+			else if (marker)
+				cout << "X ";
+			else
+				cout << "  ";
+
+			if (j == (numCols - 1))
+				cout << "|";
+		}
+		cout << endl;
+	}
+
+	void printBottomLine() {
+		for (int j = 0; j < numCols; j++) {
+			cout << "|   ";
+
+			if (j == (numCols - 1))
+				cout << "|";
+
+		}
+		cout << endl;
+	}
+
+	void printBoard() {
+		for (int i = 0; i < numRows; i++) {
+			int row = i + 1;
+			printDividerLine();
+			printSquareLine(row);
+			printCenterLine(row);
+			printBottomLine();
+
+			if (i == (numRows - 1))
+				printDividerLine();
+		}
+	}
+
+	void printHeader() {
+		cout << endl;
+		printDividerLine(); 
+		cout << "BombAvoider V 1.0" << endl;
+		cout << endl;
+		cout << "Daniel Hewitt" << endl;
+		cout << endl;
+		cout << endl;
+		printDividerLine();
+		cout << endl;
+	}
+
+	void setBoardHidden(const int row, const int col, bool hidden) {
+		boardSquares[{row, col}].setHidden(hidden);
+	}
+
+	bool getBoardHidden(const int row, const int col) {
+		return boardSquares[{row, col}].getHidden();
+	}
+
+	bool getBoardbomb(const int row, const int col) {
+		return boardSquares[{row, col}].getbomb();
+	}
+
+	void decrementNumbombs() {
+		numbombs--;
+	}
+
+	int getNumbombs() const {
+		return numbombs;
+	}
+
+	void setBoardMarker(const int row, const int col, bool marker) {
+		boardSquares[{row, col}].setMarker(marker);
+	}
+
+	bool checkBoardVictory() {
+		int row, col;
+		bool victory = false;
+
+		if (numbombs == 0)
+			victory = true;
+		else
+			victory = false;
+
+		return victory;
+	}
+
+
+};
+
+// Functions
+
+array<int, 2> SquarePositionIO() {
+	array<int, 2> SquarePosition;
+	cout << "Choose a Square." << endl;
+	cout << "Enter the row: " << endl;
+	cin >> SquarePosition[0];
+	cout << "Enter the column: " << endl;
+	cin >> SquarePosition[1];
+	return SquarePosition;
+	
+}
+
+// Main
+
+int main() {
+
+	// Enlarge the windows console
+	HWND handle = GetConsoleWindow();
+	RECT r;
+	GetWindowRect(handle, &r);
+	MoveWindow(handle, r.left, r.top, 800, 800, TRUE);
+
+	std::string userString;
+	string max;
+	bool gameOver = false;
+	bool victory = false;
+	array<int, 2> SquarePosition;
+	int SquareRow, SquareCol;
+
+	Board newGame;
+	newGame.printHeader();
+
+	// Start game
+	cout << "To Start A New Game Press Y Or To Quit Press X: " << endl;
+	cin >> userString;
+	if (userString == "X" || userString == "x")
+		return 0;
+	else if (userString == "Y" || userString == "Yes" || userString == "y") {
+		cout << endl;
+		cout << "Number of bombs are = " << newGame.getNumbombs();
+		cout << endl;
+		newGame.printBoard();
+	}
+	else {
+		cout << endl;
+		cout << "You Defied Me! GoodBye (-_-)";
+		cout << endl;
+		return 1;
+	}
+
+	while (!gameOver) {
+
+		//Start round by asking to reveal a Square or place a marker
+		cout << "Press (R) To Reveal A Square Or Press (M) To Mark It: " << endl;
+		cin >> userString;
+
+		if ((userString == "R") || (userString == "r")) {
+			// Ask user to reveal a Square
+			SquarePosition = SquarePositionIO();
+			SquareRow = SquarePosition[0];
+			SquareCol = SquarePosition[1];
+
+			// Modify the board
+			newGame.setBoardHidden(SquareRow, SquareCol, false);
+		}
+		else if ((userString == "M") || (userString == "m")) {
+			// Ask user to mark a Square
+			SquarePosition = SquarePositionIO();
+			SquareRow = SquarePosition[0];
+			SquareCol = SquarePosition[1];
+
+			// Modify the board
+			newGame.setBoardMarker(SquareRow, SquareCol, true);
+
+			// Decrement number of bombs if user marks a bomb location
+			if (newGame.getBoardbomb(SquareRow, SquareCol))
+				newGame.decrementNumbombs();
+		}
+
+		// Show the new board
+		newGame.printBoard();
+
+		// Win the game if you place markers on all bombs
+		victory = newGame.checkBoardVictory();
+		if (victory) {
+			cout << "You placed markers on all bombs! You won the game!!" << endl;
+			cout << endl;
+
+			cout << "Press the Enter key to exit ..." << endl;
+			cin.ignore(numeric_limits<std::streamsize>::max(), '\n');
+			cin.get();
+			return 0;
+		}
+		// BOOOOM! Better Luck Next Time Buddy
+		else if (!newGame.getBoardHidden(SquareRow, SquareCol) && newGame.getBoardbomb(SquareRow, SquareCol)) {
+			cout << "You stepped on a bomb! Game Over!!!" << endl;
+			cout << endl;
+			gameOver = true;
+
+			cout << "Press the Enter key to exit ..." << endl;
+			cin.ignore(numeric_limits<std::streamsize>::max(), '\n');
+			cin.get();
+			return 0;
+
+		}
+
+	}
+
+
+	return 0;
+}
